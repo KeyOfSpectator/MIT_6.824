@@ -1,6 +1,7 @@
 package mapreduce
 import "container/list"
 import "fmt"
+import "log"
 
 type WorkerInfo struct {
   address string
@@ -29,74 +30,63 @@ func (mr *MapReduce) KillWorkers() *list.List {
 func (mr *MapReduce) RunMaster() *list.List {
   // Your code here
 
-  //
+  log.Printf("RunMaster...\n")
+
   l := list.New()
 
-  // map
-  cur_miss := make(chan int)
-  //var ch [len(mr.Workers)] chan int // mutex channels
-  cur_miss <- 0
-  for wi, w := range mr.Workers {
-    //ch[wi] = make(chan int)
-    go func(){
-      var cur_map := <- cur_miss
-      for cur_map < mr.nMap { //while
+// type DoJobArgs struct {
+//   File string
+//   Operation JobType
+//   JobNumber int       // this job's number
+//   NumOtherPhase int   // total number of jobs in other phase (map or reduce)
+// }
 
-        go func(){
-          // call
-          args := &DoJobArgs{ mr.file , &JobType{ Map } , cur_map , mr.nMap}
-          var reply DoJobReply;
-          ok := call(w.address, "Worker.DoJob", args, &reply)
-          if ok == false {
-            fmt.Printf("DoWork: RPC %s DoJob error\n", w.address)
-          } else {
-           l.PushBack(cur_map)
-          }
-          cur_miss <- (cur_map+1)
-        }()
+// map
+  for cur_m := 0 ; cur_m < mr.nMap ; cur_m ++ {
+    worker := <- mr.registerChannel
+    //log.Printf("Current Num Index %s \n" , cur_m)
+    mr.Workers[worker] = &WorkerInfo{ worker }
 
-        cur_map := <- cur_miss
-        
+    go func(cur_m int){
+      // call 
+      args := &DoJobArgs{ mr.file , "Map" , cur_m , mr.nReduce}
+      var reply DoJobReply;
+      ok := call(worker, "Worker.DoJob", args, &reply)
+      if ok == false {
+        fmt.Printf("DoWork: RPC %s DoJob error\n", worker)
+      } else {
+        l.PushBack(cur_m)
       }
-    }()
-
+      //  
+      mr.registerChannel <- worker
+    }(cur_m)   // !!!
   }
 
-  // reduce
-  cur_miss := make(chan int)
-  //var ch [len(mr.Workers)] chan int // mutex channels
-  cur_miss <- 0
-  for wi, w := range mr.Workers {
-    //ch[wi] = make(chan int)
-    go func(){
-      var cur_red := <- cur_miss
-      for cur_red < mr.nReduce { //while
-
-        go func(){
-          // call
-          args := &DoJobArgs{ mr.file , &JobType{ Reduce } , cur_red , mr.nReduce}
-          var reply DoJobReply;
-          ok := call(w.address, "Worker.DoJob", args, &reply)
-          if ok == false {
-            fmt.Printf("DoWork: RPC %s DoJob error\n", w.address)
-          } else {
-           l.PushBack(cur_red)
-          }
-          cur_miss <- (cur_red+1)
-        }()
-        
-        cur_red := <- cur_miss
-        
-      }
-    }()
-
-  }
   
 
-  // reduce
-  for i := 0; i < mr.nReduce; i++ {
-    DoReduce(i, mr.file, mr.nMap, Reduce)
+  log.Printf("Master Map Done.\n")
+
+// reduce
+  for cur_m := 0 ; cur_m < mr.nReduce ; cur_m ++ {
+    worker := <- mr.registerChannel
+    mr.Workers[worker] = &WorkerInfo{ worker }
+
+    go func(cur_m int){
+      // call 
+      args := &DoJobArgs{ mr.file , "Reduce" , cur_m , mr.nMap}
+      var reply DoJobReply;
+      ok := call(worker, "Worker.DoJob", args, &reply)
+      if ok == false {
+        fmt.Printf("DoWork: RPC %s DoJob error\n", worker)
+      } else {
+        l.PushBack(cur_m)
+      }
+      // 
+      mr.registerChannel <- worker
+    }(cur_m)
   }
+
+  log.Printf("Master Reduce Done.\n")
 
   return mr.KillWorkers()
 }

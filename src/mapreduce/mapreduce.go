@@ -78,18 +78,21 @@ func InitMapReduce(nmap int, nreduce int,
   mr.DoneChannel = make(chan bool)
 
   // initialize any additional state here
+  mr.Workers = make(map[string]*WorkerInfo)
   return mr
 }
 
 func MakeMapReduce(nmap int, nreduce int,
                    file string, master string) *MapReduce {
   mr := InitMapReduce(nmap, nreduce, file, master)
+  fmt.Printf("MakeMapReduce......\n")
   mr.StartRegistrationServer()
   go mr.Run()
   return mr
 }
 
 func (mr *MapReduce) Register(args *RegisterArgs, res *RegisterReply) error {
+  log.Printf("Register: worker %s\n", args.Worker)
   DPrintf("Register: worker %s\n", args.Worker)
   mr.registerChannel <- args.Worker
   res.OK = true
