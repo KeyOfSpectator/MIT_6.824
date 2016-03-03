@@ -64,6 +64,7 @@ type MapReduce struct {
   Workers map[string]*WorkerInfo 
 
   // add any additional state here
+  last_succ_m int
 }
 
 func InitMapReduce(nmap int, nreduce int,
@@ -79,6 +80,7 @@ func InitMapReduce(nmap int, nreduce int,
 
   // initialize any additional state here
   mr.Workers = make(map[string]*WorkerInfo)
+  mr.last_succ_m = -1
   return mr
 }
 
